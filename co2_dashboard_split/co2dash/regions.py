@@ -1,5 +1,4 @@
 
-# Illustrative grid emission factors (tCO2/kWh). Users can override.
 REGIONAL_GRID = {
     "India": 0.00071,
     "EU (avg)": 0.00025,

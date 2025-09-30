@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 from io import BytesIO
 from PIL import Image
-
 from co2dash.i18n import LANGS
 from co2dash.regions import REGIONAL_GRID
 from co2dash.emissions import calculate_emissions, apply_interventions
@@ -15,45 +14,66 @@ from co2dash.pdf_export import export_pdf
 
 st.set_page_config(page_title="🌱 SME CO₂ Dashboard", layout="wide")
 
-# Language selector
-lang = st.sidebar.selectbox("Language / भाषा", ["en", "hi"], index=0)
-T = LANGS[lang]
+DEFAULTS = dict(production=500.0, coal=200.0, electricity=100000.0, scrap_percent=20.0)
 
-st.title(T["title"])
-st.caption(T["intro"])
+def reset_inputs():
+    for k, v in DEFAULTS.items():
+        st.session_state[k] = v
+
+# Language selector
+lang = st.sidebar.selectbox("Language / भाषा", ["en", "hi"], index=0); T = LANGS[lang]
+
+st.title(T["title"]); st.caption(T["intro"])
 st.sidebar.markdown(f"**{T['lang']}**: {lang.upper()}")
 
-# Region selection for electricity factor
+# Region + custom factors
 region = st.selectbox(T["region"], list(REGIONAL_GRID.keys()), index=0)
 default_elec_factor = REGIONAL_GRID[region]
 
-# Custom factors
 with st.expander(T["override_factors"]):
     colf1, colf2, colf3 = st.columns(3)
     coal_factor = colf1.number_input(T["coal_factor"], min_value=0.0, value=2.5, step=0.1, help="tCO₂ per ton of coal")
     elec_factor = colf2.number_input(T["elec_factor"], min_value=0.0, value=float(default_elec_factor), step=0.00001, format="%.5f", help="tCO₂ per kWh")
     proc_factor = colf3.number_input(T["proc_factor"], min_value=0.0, value=1.8, step=0.1, help="tCO₂ per ton of steel")
-
 factors = {"coal_factor": coal_factor, "electricity_factor": elec_factor, "process_factor": proc_factor}
 
-# Plant inputs (number inputs instead of sliders)
+# Inputs + Reset
 st.header(T["plant_data"])
-c1, c2 = st.columns(2)
-with c1:
-    production = st.number_input(T["prod"], min_value=0.0, value=500.0, step=1.0, help="Monthly tons of finished steel")
-    coal = st.number_input(T["coal"], min_value=0.0, value=200.0, step=1.0, help="Monthly tons of coal")
-with c2:
-    electricity = st.number_input(T["elec"], min_value=0.0, value=100000.0, step=100.0, help="Monthly kWh")
-    scrap_percent = st.number_input(T["scrap"], min_value=0.0, max_value=100.0, value=20.0, step=1.0, help="Percent of scrap in charge mix")
+rc1, rc2 = st.columns([3,1])
+with rc1:
+    c1, c2 = st.columns(2)
+    with c1:
+        production = st.number_input(T["prod"], key="production", min_value=0.0, value=st.session_state.get("production", DEFAULTS["production"]), step=1.0, help="Monthly tons of finished steel")
+        coal = st.number_input(T["coal"], key="coal", min_value=0.0, value=st.session_state.get("coal", DEFAULTS["coal"]), step=1.0, help="Monthly tons of coal")
+    with c2:
+        electricity = st.number_input(T["elec"], key="electricity", min_value=0.0, value=st.session_state.get("electricity", DEFAULTS["electricity"]), step=100.0, help="Monthly kWh")
+        scrap_percent = st.number_input(T["scrap"], key="scrap_percent", min_value=0.0, max_value=100.0, value=st.session_state.get("scrap_percent", DEFAULTS["scrap_percent"]), step=1.0, help="Percent of scrap in charge mix")
+with rc2:
+    if st.button(T["reset"]):
+        reset_inputs(); st.experimental_rerun()
 
+# Calculations
 annual_production = production * 12
 annual_coal = coal * 12
 annual_electricity = electricity * 12
-
 baseline = calculate_emissions(annual_production, annual_coal, annual_electricity, scrap_percent, factors)
 
-# Actions
+# Summary first
+st.header(T["summary"])
+m1, m2, m3 = st.columns(3)
+m1.metric(T["baseline"], f"{baseline['Total CO2 (tons)']:.1f}")
+post_total_placeholder = m2.empty()
+reduction_placeholder = m3.empty()
+
+# Charts under summary
+st.subheader(T["charts"])
+fig_pie = fig_breakdown(baseline["Breakdown"], T["breakdown"])
+st.plotly_chart(fig_pie, use_container_width=True)
+st.caption(T["desc_breakdown"])
+
+# Actions after summary
 st.header(T["actions"])
+st.caption(T["actions_sub"])
 actions_desc = {
     T["action_scrap"]: T["desc_scrap"],
     T["action_heat"]: T["desc_heat"],
@@ -71,23 +91,36 @@ for lbl, desc in actions_desc.items():
         if lbl == T["action_eff"]: flags["eff"]=1
 
 post_total, reduction = apply_interventions(baseline["Total CO2 (tons)"], flags)
+post_total_placeholder.metric(T["post"], f"{post_total:.1f}")
+reduction_placeholder.metric(T["reduction"], f"{reduction:.1f}")
 
-# Summary
-st.header(T["summary"])
-m1, m2, m3 = st.columns(3)
-m1.metric(T["baseline"], f"{baseline['Total CO2 (tons)']:.1f}")
-m2.metric(T["post"], f"{post_total:.1f}")
-m3.metric(T["reduction"], f"{reduction:.1f}")
-
-# Charts
-st.subheader(T["charts"])
 fig_bar = fig_before_after(baseline["Total CO2 (tons)"], post_total)
 st.plotly_chart(fig_bar, use_container_width=True)
+st.caption(T["desc_before_after"])
 
-fig_pie = fig_breakdown(baseline["Breakdown"], T["breakdown"])
-st.plotly_chart(fig_pie, use_container_width=True)
+# Smart recommendations
+st.header(T["smart_recs"])
+st.caption(T["recs_sub"])
+tips = make_recommendations(baseline["Breakdown"])
+for tip in tips:
+    st.write("• " + tip)
 
-# Sensitivity Analysis (kept as sliders to explore dynamics quickly)
+# Focus table
+focus_rows = []
+bk = baseline["Breakdown"]
+dom = max(bk, key=bk.get)
+if dom.startswith("Electricity"):
+    focus_rows.append((T["focus_elec"], T["dir_down"]))
+if dom.startswith("Coal"):
+    focus_rows.append((T["focus_coal"], T["dir_down"]))
+if dom.startswith("Steel-making"):
+    focus_rows.append((T["focus_process"], T["dir_down"]))
+if focus_rows:
+    df_focus = pd.DataFrame(focus_rows, columns=[T["focus_driver"], T["focus_direction"]])
+    st.subheader(T["focus_table"])
+    st.dataframe(df_focus, use_container_width=True)
+
+# Sensitivity after recommendations
 st.header(T["sensitivity"])
 st.caption(T["sens_note"])
 s1, s2, s3, s4 = st.columns(4)
@@ -102,52 +135,39 @@ sens_elec = annual_electricity * (1 + d_elec/100)
 sens_scrap = min(max(scrap_percent + d_scrap, 0), 100)
 
 sens_base = calculate_emissions(sens_production, sens_coal, sens_elec, sens_scrap, factors)
-st.plotly_chart(
-    fig_breakdown(sens_base["Breakdown"], f"{T['breakdown']} (Sensitivity)"),
-    use_container_width=True
-)
+st.plotly_chart(fig_breakdown(sens_base["Breakdown"], f"{T['breakdown']} (Sensitivity)"), use_container_width=True)
+st.caption(T["desc_sens_breakdown"])
 
-# Sweep electricity to show curve
 sweep = np.arange(-50, 51, 5)
 totals = []
 for v in sweep:
     _elec = annual_electricity * (1 + v/100)
     totals.append(calculate_emissions(annual_production, annual_coal, _elec, scrap_percent, factors)["Total CO2 (tons)"])
 st.plotly_chart(fig_sensitivity(sweep, totals), use_container_width=True)
+st.caption(T["desc_sens_curve"])
 
-# Smart Recommendations
-st.header(T["smart_recs"])
-for tip in make_recommendations(baseline["Breakdown"]):
-    st.write("• " + tip)
-
-# Multi-Plant Comparison (in-memory)
+# Multi-plant comparison
 st.header(T["compare"])
 if "plants" not in st.session_state:
     st.session_state.plants = {}
-
 pc1, pc2, pc3 = st.columns([2,1,1])
 with pc1:
     plant_name = st.text_input(T["plant_name"], "Plant A")
 if pc2.button(T["add_plant"]):
-    st.session_state.plants[plant_name] = {
-        "Baseline": baseline["Total CO2 (tons)"],
-        "Post": post_total
-    }
+    st.session_state.plants[plant_name] = {"Baseline": baseline["Total CO2 (tons)"], "Post": post_total}
 if pc3.button(T["clear_plants"]):
     st.session_state.plants = {}
-
 if st.session_state.plants:
     df_plants = pd.DataFrame(st.session_state.plants).T
     st.subheader(T["plants_table"])
     st.dataframe(df_plants, use_container_width=True)
-
     df_long = df_plants.reset_index().melt(id_vars="index", var_name="Scenario", value_name="tCO2")
     df_long.rename(columns={"index":"Plant"}, inplace=True)
     import plotly.express as px
     fig_cmp = px.bar(df_long, x="Plant", y="tCO2", color="Scenario", barmode="group", text="tCO2")
     st.plotly_chart(fig_cmp, use_container_width=True)
 
-# Branded PDF Export with charts & logo
+# Export with timestamped filename, localized labels
 st.header(T["export"])
 logo_file = st.file_uploader(T["logo"], type=["png","jpg","jpeg"])
 logo_path = None
@@ -160,15 +180,15 @@ if logo_file:
     Image.open(tmp).save(logo_path)
 
 if st.button(T["download_pdf"]):
-    export_pdf(
-        filename="CO2_Summary.pdf",
+    outfile = export_pdf(
+        filename_base="CO2_Summary",
         baseline=baseline,
         post_total=post_total,
         reduction=reduction,
         selected_actions=selected_actions,
         logo_image=logo_path,
-        fig1=fig_bar,
-        fig2=fig_pie,
+        fig1=fig_before_after(baseline["Total CO2 (tons)"], post_total),
+        fig2=fig_breakdown(baseline["Breakdown"], T["breakdown"]),
         lang_code=lang
     )
-    st.success(T["saved_msg"])
+    st.success(f"{T['saved_msg']} ({outfile})")
