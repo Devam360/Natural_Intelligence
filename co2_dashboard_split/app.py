@@ -30,21 +30,21 @@ default_elec_factor = REGIONAL_GRID[region]
 # Custom factors
 with st.expander(T["override_factors"]):
     colf1, colf2, colf3 = st.columns(3)
-    coal_factor = colf1.number_input(T["coal_factor"], min_value=0.0, value=2.5, step=0.1)
-    elec_factor = colf2.number_input(T["elec_factor"], min_value=0.0, value=float(default_elec_factor), step=0.00001, format="%.5f")
-    proc_factor = colf3.number_input(T["proc_factor"], min_value=0.0, value=1.8, step=0.1)
+    coal_factor = colf1.number_input(T["coal_factor"], min_value=0.0, value=2.5, step=0.1, help="tCO₂ per ton of coal")
+    elec_factor = colf2.number_input(T["elec_factor"], min_value=0.0, value=float(default_elec_factor), step=0.00001, format="%.5f", help="tCO₂ per kWh")
+    proc_factor = colf3.number_input(T["proc_factor"], min_value=0.0, value=1.8, step=0.1, help="tCO₂ per ton of steel")
 
 factors = {"coal_factor": coal_factor, "electricity_factor": elec_factor, "process_factor": proc_factor}
 
-# Plant inputs
+# Plant inputs (number inputs instead of sliders)
 st.header(T["plant_data"])
 c1, c2 = st.columns(2)
 with c1:
-    production = st.slider(T["prod"], 0, 1000, 500)
-    coal = st.slider(T["coal"], 0, 500, 200)
+    production = st.number_input(T["prod"], min_value=0.0, value=500.0, step=1.0, help="Monthly tons of finished steel")
+    coal = st.number_input(T["coal"], min_value=0.0, value=200.0, step=1.0, help="Monthly tons of coal")
 with c2:
-    electricity = st.slider(T["elec"], 0, 200000, 100000)
-    scrap_percent = st.slider(T["scrap"], 0, 80, 20)
+    electricity = st.number_input(T["elec"], min_value=0.0, value=100000.0, step=100.0, help="Monthly kWh")
+    scrap_percent = st.number_input(T["scrap"], min_value=0.0, max_value=100.0, value=20.0, step=1.0, help="Percent of scrap in charge mix")
 
 annual_production = production * 12
 annual_coal = coal * 12
@@ -87,7 +87,7 @@ st.plotly_chart(fig_bar, use_container_width=True)
 fig_pie = fig_breakdown(baseline["Breakdown"], T["breakdown"])
 st.plotly_chart(fig_pie, use_container_width=True)
 
-# Sensitivity Analysis
+# Sensitivity Analysis (kept as sliders to explore dynamics quickly)
 st.header(T["sensitivity"])
 st.caption(T["sens_note"])
 s1, s2, s3, s4 = st.columns(4)
