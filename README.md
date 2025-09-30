@@ -20,22 +20,22 @@ Features:
 
 How to Use:
 
-1. Select Language
+1. Select Language - 
 Choose between English or Hindi from the sidebar.
 
-2. Enter Plant Data
+2. Enter Plant Data - 
 Input your plant’s monthly production, coal consumption, electricity usage, and scrap percentage.
 
-3. Adjust Emission Factors (Optional)
+3. Adjust Emission Factors (Optional) - 
 If you have more accurate emission data, you can override the default coal, electricity, and process emission factors.
 
-4. View Baseline Emissions
+4. View Baseline Emissions - 
 The app calculates and displays your annual CO₂ emissions and shows the breakdown by source.
 
-5. Choose Recommended Actions
+5. Choose Recommended Actions - 
 Tick the actions you plan to implement, such as improving efficiency or using more scrap. The app shows the new CO₂ emissions after applying these changes.
 
-6. Understand Recommendations
+6. Understand Recommendations - 
 Based on your baseline emissions, the app provides automatic insights on which sources dominate your emissions and where you should focus.
 
 7. Test Sensitivity - 
