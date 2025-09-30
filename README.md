@@ -38,13 +38,13 @@ Tick the actions you plan to implement, such as improving efficiency or using mo
 6. Understand Recommendations
 Based on your baseline emissions, the app provides automatic insights on which sources dominate your emissions and where you should focus.
 
-7. Test Sensitivity
+7. Test Sensitivity - 
 Adjust sliders to simulate changes in inputs (e.g. +10% electricity or -5% coal) and see how it affects emissions.
 
-8. Compare Plants
+8. Compare Plants - 
 You can add and save multiple plants to compare their emissions before and after actions.
 
-9. Export Report
+9. Export Report - 
 Upload your company logo (optional), and download a PDF summary of your data, actions, and emissions profile.
 
 Requirements:
