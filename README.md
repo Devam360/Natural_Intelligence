@@ -55,6 +55,8 @@ Requirements:
 
 - pandas, numpy, plotly, pillow, kaleido, fpdf
 
+Install requirements:
+- pip install -r requirements.txt
 
 Run the app:
 
