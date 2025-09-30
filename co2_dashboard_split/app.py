@@ -1,5 +1,4 @@
 
-# streamlit run app.py
 import streamlit as st
 import numpy as np
 import pandas as pd
@@ -12,66 +11,78 @@ from co2dash.recommendations import make_recommendations
 from co2dash.charts import fig_before_after, fig_breakdown, fig_sensitivity
 from co2dash.pdf_export import export_pdf
 
-st.set_page_config(page_title="🌱 SME CO₂ Dashboard", layout="wide")
+st.set_page_config(page_title="SME CO₂ Dashboard", layout="wide")
 
+# ---- Defaults ----
 DEFAULTS = dict(production=500.0, coal=200.0, electricity=100000.0, scrap_percent=20.0)
 
-def reset_inputs():
+# Initialize defaults once
+if "initialized" not in st.session_state:
+    st.session_state.update(DEFAULTS)
+    st.session_state["initialized"] = True
+
+# ---- Pre-widget reset (must run BEFORE any widgets are created) ----
+if st.session_state.get("reset_triggered", False):
     for k, v in DEFAULTS.items():
         st.session_state[k] = v
+    st.session_state["reset_triggered"] = False
+    st.rerun()
 
-# Language selector
-lang = st.sidebar.selectbox("Language / भाषा", ["en", "hi"], index=0); T = LANGS[lang]
+# ---- Language ----
+lang = st.sidebar.selectbox("Language / भाषा", ["en", "hi"], index=0)
+T = LANGS[lang]
 
-st.title(T["title"]); st.caption(T["intro"])
+st.title(T["title"])
+st.caption(T["intro"])
 st.sidebar.markdown(f"**{T['lang']}**: {lang.upper()}")
 
-# Region + custom factors
+# ---- Region + custom factors ----
 region = st.selectbox(T["region"], list(REGIONAL_GRID.keys()), index=0)
 default_elec_factor = REGIONAL_GRID[region]
 
 with st.expander(T["override_factors"]):
     colf1, colf2, colf3 = st.columns(3)
-    coal_factor = colf1.number_input(T["coal_factor"], min_value=0.0, value=2.5, step=0.1, help="tCO₂ per ton of coal")
-    elec_factor = colf2.number_input(T["elec_factor"], min_value=0.0, value=float(default_elec_factor), step=0.00001, format="%.5f", help="tCO₂ per kWh")
-    proc_factor = colf3.number_input(T["proc_factor"], min_value=0.0, value=1.8, step=0.1, help="tCO₂ per ton of steel")
+    coal_factor = colf1.number_input(T["coal_factor"], min_value=0.0, value=2.5, step=0.1)
+    elec_factor = colf2.number_input(T["elec_factor"], min_value=0.0, value=float(default_elec_factor), step=0.00001, format="%.5f")
+    proc_factor = colf3.number_input(T["proc_factor"], min_value=0.0, value=1.8, step=0.1)
 factors = {"coal_factor": coal_factor, "electricity_factor": elec_factor, "process_factor": proc_factor}
 
-# Inputs + Reset
+# ---- Inputs + Reset button ----
 st.header(T["plant_data"])
 rc1, rc2 = st.columns([3,1])
 with rc1:
     c1, c2 = st.columns(2)
     with c1:
-        production = st.number_input(T["prod"], key="production", min_value=0.0, value=st.session_state.get("production", DEFAULTS["production"]), step=1.0, help="Monthly tons of finished steel")
-        coal = st.number_input(T["coal"], key="coal", min_value=0.0, value=st.session_state.get("coal", DEFAULTS["coal"]), step=1.0, help="Monthly tons of coal")
+        production = st.number_input(T["prod"], key="production", min_value=0.0, value=st.session_state.get("production", DEFAULTS["production"]), step=1.0)
+        coal = st.number_input(T["coal"], key="coal", min_value=0.0, value=st.session_state.get("coal", DEFAULTS["coal"]), step=1.0)
     with c2:
-        electricity = st.number_input(T["elec"], key="electricity", min_value=0.0, value=st.session_state.get("electricity", DEFAULTS["electricity"]), step=100.0, help="Monthly kWh")
-        scrap_percent = st.number_input(T["scrap"], key="scrap_percent", min_value=0.0, max_value=100.0, value=st.session_state.get("scrap_percent", DEFAULTS["scrap_percent"]), step=1.0, help="Percent of scrap in charge mix")
+        electricity = st.number_input(T["elec"], key="electricity", min_value=0.0, value=st.session_state.get("electricity", DEFAULTS["electricity"]), step=100.0)
+        scrap_percent = st.number_input(T["scrap"], key="scrap_percent", min_value=0.0, max_value=100.0, value=st.session_state.get("scrap_percent", DEFAULTS["scrap_percent"]), step=1.0)
 with rc2:
     if st.button(T["reset"]):
-        reset_inputs(); st.experimental_rerun()
+        st.session_state["reset_triggered"] = True
+        st.rerun()
 
-# Calculations
+# ---- Calculations ----
 annual_production = production * 12
 annual_coal = coal * 12
 annual_electricity = electricity * 12
 baseline = calculate_emissions(annual_production, annual_coal, annual_electricity, scrap_percent, factors)
 
-# Summary first
+# ---- Summary ----
 st.header(T["summary"])
 m1, m2, m3 = st.columns(3)
 m1.metric(T["baseline"], f"{baseline['Total CO2 (tons)']:.1f}")
 post_total_placeholder = m2.empty()
 reduction_placeholder = m3.empty()
 
-# Charts under summary
+# ---- Charts ----
 st.subheader(T["charts"])
 fig_pie = fig_breakdown(baseline["Breakdown"], T["breakdown"])
 st.plotly_chart(fig_pie, use_container_width=True)
 st.caption(T["desc_breakdown"])
 
-# Actions after summary
+# ---- Actions ----
 st.header(T["actions"])
 st.caption(T["actions_sub"])
 actions_desc = {
@@ -98,7 +109,7 @@ fig_bar = fig_before_after(baseline["Total CO2 (tons)"], post_total)
 st.plotly_chart(fig_bar, use_container_width=True)
 st.caption(T["desc_before_after"])
 
-# Smart recommendations
+# ---- Smart recommendations ----
 st.header(T["smart_recs"])
 st.caption(T["recs_sub"])
 tips = make_recommendations(baseline["Breakdown"])
@@ -120,7 +131,7 @@ if focus_rows:
     st.subheader(T["focus_table"])
     st.dataframe(df_focus, use_container_width=True)
 
-# Sensitivity after recommendations
+# ---- Sensitivity ----
 st.header(T["sensitivity"])
 st.caption(T["sens_note"])
 s1, s2, s3, s4 = st.columns(4)
@@ -146,7 +157,7 @@ for v in sweep:
 st.plotly_chart(fig_sensitivity(sweep, totals), use_container_width=True)
 st.caption(T["desc_sens_curve"])
 
-# Multi-plant comparison
+# ---- Compare ----
 st.header(T["compare"])
 if "plants" not in st.session_state:
     st.session_state.plants = {}
@@ -167,7 +178,7 @@ if st.session_state.plants:
     fig_cmp = px.bar(df_long, x="Plant", y="tCO2", color="Scenario", barmode="group", text="tCO2")
     st.plotly_chart(fig_cmp, use_container_width=True)
 
-# Export with timestamped filename, localized labels
+# ---- Export ----
 st.header(T["export"])
 logo_file = st.file_uploader(T["logo"], type=["png","jpg","jpeg"])
 logo_path = None

@@ -5,7 +5,7 @@ SAFE_SEQ = px.colors.qualitative.Safe
 
 def fig_before_after(baseline_total, post_total):
     df = pd.DataFrame({
-        "Scenario": ["Before 🔴", "After 🟢"],
+        "Scenario": ["Before", "After"],
         "CO2 Emissions (tons)": [baseline_total, post_total]
     })
     fig = px.bar(df, x="Scenario", y="CO2 Emissions (tons)", text="CO2 Emissions (tons)")
